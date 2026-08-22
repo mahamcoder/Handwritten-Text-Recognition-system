@@ -1,0 +1,34 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Python
+venv/
+.venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Node / Frontend
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# Firebase / Secrets
+*service_account*.json
+firebase-key.json
+*.pem
+
+# IDE / System
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

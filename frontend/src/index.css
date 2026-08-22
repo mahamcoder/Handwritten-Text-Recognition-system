@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --paper: #F4F8F8;
+  --ink: #183D40;
+  --ink-blue: #235D62;
+  --highlighter: #78C0BD;
+  --graphite: #5A7E81;
+  --line: #D2E3E3;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #F4F8F8;
+  color: #183D40;
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
+}
+
+/* Custom Deep Teal Contour Card Background */
+.teal-card-bg {
+  background: linear-gradient(145deg, #256368 0%, #1D4F53 100%);
+}
+
+.bg-mesh-teal {
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(120, 192, 189, 0.12) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(35, 93, 98, 0.08) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(24, 62, 65, 0.05) 0px, transparent 50%);
+}
+
+/* Oval Circle Ring SVG highlight */
+.oval-ring {
+  position: relative;
+  display: inline-block;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #EBF3F3;
+}
+::-webkit-scrollbar-thumb {
+  background: #B5D6D5;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #78C0BD;
+}
+
+/* Scan-sweep animation */
+@keyframes scan-sweep {
+  0% { left: 0; }
+  100% { left: 100%; }
+}
+@keyframes scan-reveal {
+  0% { width: 0; }
+  100% { width: 100%; }
+}
+.animate-scan-sweep {
+  animation: scan-sweep 2s ease-in-out infinite;
+}
+.animate-scan-reveal {
+  animation: scan-reveal 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-scan-sweep,
+  .animate-scan-reveal {
+    animation: none;
+  }
+}
