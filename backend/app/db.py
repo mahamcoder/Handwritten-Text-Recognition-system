@@ -4,10 +4,39 @@ from datetime import datetime, timezone
 import firebase_admin
 from firebase_admin import firestore
 
+import json
+import os
+
 logger = logging.getLogger(__name__)
 
-# Fallback in-memory document store when Firestore service account is not configured locally
-MEMORY_DOCUMENTS: dict[str, dict] = {}
+# Fallback persistent document store when Firestore service account is not configured locally
+LOCAL_STORE_PATH = os.path.join(os.path.dirname(__file__), "local_storage.json")
+
+def _load_storage() -> dict[str, dict]:
+    if os.path.exists(LOCAL_STORE_PATH):
+        try:
+            with open(LOCAL_STORE_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Could not load local storage file: {e}")
+    return {}
+
+def _save_storage(data: dict):
+    try:
+        serializable = {}
+        for k, v in data.items():
+            item = dict(v)
+            for ts_field in ("upload_date", "updated_at"):
+                val = item.get(ts_field)
+                if val and hasattr(val, "isoformat"):
+                    item[ts_field] = val.isoformat()
+            serializable[k] = item
+        with open(LOCAL_STORE_PATH, "w", encoding="utf-8") as f:
+            json.dump(serializable, f, indent=2, default=str)
+    except Exception as e:
+        logger.warning(f"Could not persist local storage file: {e}")
+
+MEMORY_DOCUMENTS: dict[str, dict] = _load_storage()
 
 def get_firestore_client():
     if not firebase_admin._apps:
@@ -31,8 +60,9 @@ def save_document(doc_data: dict) -> str:
         except Exception as e:
             logger.warning(f"Firestore set() failed, falling back to memory store: {e}")
 
-    # Fallback to memory store
+    # Fallback to persistent local store
     MEMORY_DOCUMENTS[doc_id] = doc_data
+    _save_storage(MEMORY_DOCUMENTS)
     return doc_id
 
 def get_document_by_id(doc_id: str) -> dict | None:
@@ -81,6 +111,7 @@ def update_document(doc_id: str, update_data: dict) -> bool:
 
     if doc_id in MEMORY_DOCUMENTS:
         MEMORY_DOCUMENTS[doc_id].update(update_data)
+        _save_storage(MEMORY_DOCUMENTS)
         return True
     return False
 
@@ -96,5 +127,6 @@ def delete_document_by_id(doc_id: str) -> bool:
 
     if doc_id in MEMORY_DOCUMENTS:
         del MEMORY_DOCUMENTS[doc_id]
+        _save_storage(MEMORY_DOCUMENTS)
         return True
     return False

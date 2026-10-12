@@ -2,7 +2,7 @@ import io
 import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, Body
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from app.auth import get_current_user
 from app.db import get_document_by_id, list_user_documents, update_document, delete_document_by_id
 
@@ -115,9 +115,9 @@ async def export_document(
     doc_title = f"Scriptly_Document_{document_id[:8]}"
 
     if format == "txt":
-        return StreamingResponse(
-            io.BytesIO(text.encode("utf-8")),
-            media_type="text/plain",
+        return Response(
+            content=text.encode("utf-8"),
+            media_type="text/plain; charset=utf-8",
             headers={"Content-Disposition": f'attachment; filename="{doc_title}.txt"'}
         )
 
@@ -145,10 +145,9 @@ async def export_document(
 
             buf = io.BytesIO()
             document.save(buf)
-            buf.seek(0)
 
-            return StreamingResponse(
-                buf,
+            return Response(
+                content=buf.getvalue(),
                 media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 headers={"Content-Disposition": f'attachment; filename="{doc_title}.docx"'}
             )
@@ -196,10 +195,9 @@ async def export_document(
                 elements.append(Paragraph(safe_line, body_style))
 
             doc.build(elements)
-            buf.seek(0)
 
-            return StreamingResponse(
-                buf,
+            return Response(
+                content=buf.getvalue(),
                 media_type="application/pdf",
                 headers={"Content-Disposition": f'attachment; filename="{doc_title}.pdf"'}
             )

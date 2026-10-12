@@ -27,8 +27,14 @@ dist-ssr/
 firebase-key.json
 *.pem
 
+# Local data storage
+local_storage.json
+backend/app/local_storage.json
+
 # IDE / System
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+
+

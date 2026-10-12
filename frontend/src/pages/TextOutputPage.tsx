@@ -4,13 +4,16 @@ import api from '../services/api';
 import {
   Loader2, AlertCircle, CheckCircle2, Copy, Download, Save,
   RefreshCw, ArrowLeft, FileText, FileType, FileDown, X, Check,
-  Sparkles, ScanLine
+  Sparkles, ScanLine, ChevronLeft, ChevronRight, Layers
 } from 'lucide-react';
 
 interface DocumentData {
   document_id: string;
   user_id: string;
   image_url: string;
+  image_urls?: string[];
+  page_count?: number;
+  pages?: Array<{ page_number: number; image_url: string; recognized_text: string }>;
   recognized_text: string;
   status: string;
   error_message: string | null;
@@ -26,11 +29,13 @@ export const TextOutputPage: React.FC = () => {
 
   const [doc, setDoc] = useState<DocumentData | null>(null);
   const [editedText, setEditedText] = useState('');
+  const [activePageIndex, setActivePageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const [textDirty, setTextDirty] = useState(false);
@@ -118,8 +123,37 @@ export const TextOutputPage: React.FC = () => {
   // Export document
   const handleExport = async (format: string) => {
     if (!documentId) return;
+    setExportError(null);
+
+    // Instant client-side download for Plain Text (.txt)
+    if (format === 'txt') {
+      try {
+        const blob = new Blob([editedText], { type: 'text/plain;charset=utf-8' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Scriptly_${documentId.slice(0, 8)}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } catch (err: any) {
+        setExportError('Failed to download text file.');
+      }
+      return;
+    }
+
     try {
       setExporting(format);
+
+      // Save any pending edits before server export
+      if (textDirty) {
+        try {
+          await api.put(`/api/documents/${documentId}/text`, { recognized_text: editedText });
+          setTextDirty(false);
+        } catch (_) {}
+      }
+
       const response = await api.get(`/api/documents/${documentId}/export?format=${format}`, {
         responseType: 'blob'
       });
@@ -133,7 +167,24 @@ export const TextOutputPage: React.FC = () => {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err: any) {
-      setError(err.response?.data?.detail || `Export as ${format.toUpperCase()} failed.`);
+      console.error('Export error:', err);
+      let errorDetail = `Export as ${format.toUpperCase()} failed.`;
+      if (err.response?.data instanceof Blob) {
+        try {
+          const errorText = await err.response.data.text();
+          const errorObj = JSON.parse(errorText);
+          errorDetail = errorObj.detail || errorDetail;
+        } catch (_) {
+          if (err.response.status === 404) {
+            errorDetail = 'Document record not found on server. Try re-saving your document.';
+          } else {
+            errorDetail = `Server error (${err.response.status}).`;
+          }
+        }
+      } else if (err.response?.data?.detail) {
+        errorDetail = err.response.data.detail;
+      }
+      setExportError(errorDetail);
     } finally {
       setExporting(null);
     }
@@ -223,6 +274,12 @@ export const TextOutputPage: React.FC = () => {
                   {doc.engine_used}
                 </span>
               )}
+              {((doc?.page_count && doc.page_count > 1) || (doc?.image_urls && doc.image_urls.length > 1)) && (
+                <span className="font-mono text-[10px] bg-teal-50 border border-teal-200 text-[#235D62] px-2 py-0.5 rounded-full flex items-center space-x-1 font-bold">
+                  <Layers className="w-3 h-3 text-[#235D62]" />
+                  <span>{doc?.page_count || doc?.image_urls?.length} Pages</span>
+                </span>
+              )}
               {doc?.status === 'done' && (
                 <span className="font-mono text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-0.5 rounded-full flex items-center space-x-1 font-bold">
                   <CheckCircle2 className="w-3 h-3" />
@@ -294,8 +351,22 @@ export const TextOutputPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Error Banner */}
-      {(error || doc?.status === 'error') && (
+      {/* Export Notice */}
+      {exportError && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start space-x-3 text-sm text-amber-800 shadow-sm animate-fadeIn">
+          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <span className="font-bold block mb-0.5">Export Notice</span>
+            <span className="text-xs">{exportError}</span>
+          </div>
+          <button onClick={() => setExportError(null)} className="text-amber-500 hover:text-amber-700">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Recognition Error Banner */}
+      {(doc?.status === 'error' || (error && doc?.status !== 'done')) && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start space-x-3 text-sm text-red-700 shadow-sm">
           <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
           <div className="flex-1 space-y-2">
@@ -317,20 +388,77 @@ export const TextOutputPage: React.FC = () => {
 
       {/* Two-Column Layout: Image + Text */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: Original Image */}
-        <div className="bg-white border border-[#D0E2E2] rounded-3xl overflow-hidden shadow-lg">
+        {/* Left: Original Image / Multi-Page Viewer */}
+        <div className="bg-white border border-[#D0E2E2] rounded-3xl overflow-hidden shadow-lg flex flex-col">
           <div className="px-4 py-3 border-b border-[#D0E2E2] bg-[#F4F8F8] flex items-center justify-between">
-            <span className="text-xs font-mono font-bold text-[#183D40] uppercase tracking-wider">
-              Original Handwritten Note
-            </span>
-            {doc?.file_size && (
-              <span className="text-[10px] font-mono text-[#5A7E81] bg-[#EBF3F3] px-2 py-0.5 rounded-full">
-                {(doc.file_size / (1024 * 1024)).toFixed(2)} MB
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-mono font-bold text-[#183D40] uppercase tracking-wider">
+                Original Handwritten Note
               </span>
-            )}
+              {doc?.image_urls && doc.image_urls.length > 1 && (
+                <span className="font-mono text-[10px] bg-[#EBF3F3] text-[#235D62] border border-[#78C0BD] px-2 py-0.5 rounded-full font-bold">
+                  Page {activePageIndex + 1} of {doc.image_urls.length}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-2">
+              {doc?.image_urls && doc.image_urls.length > 1 && (
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={() => setActivePageIndex(p => Math.max(0, p - 1))}
+                    disabled={activePageIndex === 0}
+                    className="p-1 rounded-lg bg-white border border-[#D0E2E2] text-[#235D62] hover:bg-[#D0E2E2] disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    title="Previous page"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setActivePageIndex(p => Math.min((doc.image_urls?.length || 1) - 1, p + 1))}
+                    disabled={activePageIndex === (doc.image_urls.length - 1)}
+                    className="p-1 rounded-lg bg-white border border-[#D0E2E2] text-[#235D62] hover:bg-[#D0E2E2] disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    title="Next page"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+              {doc?.file_size && (
+                <span className="text-[10px] font-mono text-[#5A7E81] bg-[#EBF3F3] px-2 py-0.5 rounded-full">
+                  {(doc.file_size / (1024 * 1024)).toFixed(2)} MB
+                </span>
+              )}
+            </div>
           </div>
-          <div className="p-4 bg-[#F4F8F8] flex items-center justify-center min-h-[260px] sm:min-h-[320px]">
-            {doc?.image_url ? (
+
+          {/* Multi-page Thumbnail / Chip Strip */}
+          {doc?.image_urls && doc.image_urls.length > 1 && (
+            <div className="px-4 py-2 bg-[#EBF3F3]/60 border-b border-[#D0E2E2] flex items-center space-x-1.5 overflow-x-auto">
+              <span className="text-[10px] font-mono font-bold text-[#5A7E81] mr-1 uppercase">Pages:</span>
+              {doc.image_urls.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setActivePageIndex(i)}
+                  className={`px-2.5 py-1 rounded-lg font-mono text-[10px] font-bold transition-all ${
+                    activePageIndex === i
+                      ? 'bg-[#235D62] text-white shadow-sm'
+                      : 'bg-white text-[#183D40] border border-[#D0E2E2] hover:bg-[#D0E2E2]'
+                  }`}
+                >
+                  Page {i + 1}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="p-4 bg-[#F4F8F8] flex items-center justify-center min-h-[260px] sm:min-h-[320px] flex-1">
+            {doc?.image_urls && doc.image_urls.length > 0 ? (
+              <img
+                src={doc.image_urls[activePageIndex] || doc.image_url}
+                alt={`Handwritten note page ${activePageIndex + 1}`}
+                className="max-w-full max-h-[460px] object-contain rounded-2xl shadow-md"
+              />
+            ) : doc?.image_url ? (
               <img
                 src={doc.image_url}
                 alt="Uploaded handwritten note"

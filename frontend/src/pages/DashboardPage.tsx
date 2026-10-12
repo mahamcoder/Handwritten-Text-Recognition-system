@@ -4,12 +4,14 @@ import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import {
   Plus, FileText, Sparkles, Loader2, AlertCircle, Clock, CheckCircle2,
-  Upload, Trash2, RefreshCw, Pencil
+  Upload, Trash2, RefreshCw, Pencil, Layers
 } from 'lucide-react';
 
 interface DocumentItem {
   document_id: string;
   image_url: string;
+  image_urls?: string[];
+  page_count?: number;
   recognized_text: string;
   status: string;
   error_message: string | null;
@@ -187,12 +189,28 @@ export const DashboardPage: React.FC = () => {
                     <FileText className="w-10 h-10 text-[#D0E2E2]" />
                   </div>
                 )}
+
+                {/* Multi-Page Indicator Badge */}
+                {doc.page_count && doc.page_count > 1 ? (
+                  <span className="absolute top-2.5 right-2.5 bg-[#183D40]/85 backdrop-blur-md text-white font-mono text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center space-x-1 shadow">
+                    <Layers className="w-3 h-3 text-[#78C0BD]" />
+                    <span>{doc.page_count} Pages</span>
+                  </span>
+                ) : null}
               </div>
 
               {/* Card Footer */}
               <div className="p-5 space-y-3">
                 <div className="flex items-center justify-between">
-                  <StatusBadge status={doc.status} />
+                  <div className="flex items-center space-x-1.5">
+                    <StatusBadge status={doc.status} />
+                    {doc.page_count && doc.page_count > 1 ? (
+                      <span className="font-mono text-[10px] bg-teal-50 border border-teal-200 text-[#235D62] px-2 py-0.5 rounded-full font-bold flex items-center space-x-1">
+                        <Layers className="w-3 h-3 text-[#235D62]" />
+                        <span>{doc.page_count}p</span>
+                      </span>
+                    ) : null}
+                  </div>
                   {doc.engine_used && (
                     <span className="font-mono text-[10px] text-[#235D62] bg-[#EBF3F3] border border-[#D0E2E2] px-2 py-0.5 rounded-md font-bold">
                       {doc.engine_used}
